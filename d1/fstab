@@ -1,0 +1,3 @@
+# <device>    <dir>        <type>        <options>            <dump> <pass>
+LABEL=boot    /boot        ext2          rw,defaults,noatime  0      1
+LABEL=root    /            ext4          rw,defaults,noatime  0      2

@@ -1,0 +1,3 @@
+/dev/mmcblk0p2  /boot/efi       vfat            defaults        0 0
+/dev/mmcblk0p3  /boot           ext4            defaults        0 0
+/dev/mmcblk0p4  /               ext4            defaults        0 0
