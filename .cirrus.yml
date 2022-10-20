@@ -238,6 +238,7 @@ task:
 
           git clone https://github.com/lwfinger/rtl8723ds.git
           pushd rtl8723ds
+            git checkout "83032266f6fbd7a6775ecf23fb4f807343ffc6f2" # lock-version
             make CROSS_COMPILE=${CROSS_COMPILE} ARCH=${ARCH} KSRC=../ -j$(nproc) modules || true
           popd
           for kernel_version in $(ls ../rootfs/lib/modules/);
