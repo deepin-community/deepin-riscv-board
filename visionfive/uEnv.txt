@@ -12,5 +12,5 @@ kernel_comp_size=0x10000000
 fdt_addr_r=0x88000000
 ramdisk_addr_r=0x88300000
 
-bootcmd=load mmc 0:2 0xa0000000 /EFI/gentoo/grubriscv64.efi; bootefi 0xa0000000
+bootcmd=load mmc 0:2 0xa0000000 /EFI/deepin/grubriscv64.efi; bootefi 0xa0000000
 bootcmd_mmc0=devnum=0; run mmc_boot

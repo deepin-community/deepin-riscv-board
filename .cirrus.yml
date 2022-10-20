@@ -2,8 +2,8 @@ compute_engine_instance:
   image_project: cirrus-images
   image: family/docker-builder
   platform: linux
-  cpu: 8
-  memory: 32G
+  cpu: 4
+  memory: 16G
 
 env:
   GITHUB_TOKEN: ENCRYPTED[2a3767f52b8878062329a7597cafea6cb63236046772a2a286f57447634dec2c49b32f3f6a4637fd9df09d7a3a3e6548]
@@ -58,6 +58,17 @@ task:
       mount "${DEVICE}"p3 rootfs/boot
       mkdir rootfs/boot/efi
       mount "${DEVICE}"p2 rootfs/boot/efi
+    elif [ x"${base_path}" = x"visionfive-2" ]; then
+      sfdisk rootfs.img < ${base_path}/part-table.conf
+      losetup -P "${DEVICE}" rootfs.img
+      mkfs.vfat -F32 "${DEVICE}"p3
+      mkfs.ext4 "${DEVICE}"p4
+      mkfs.vfat -F32 "${DEVICE}"p2
+      mount "${DEVICE}"p4 rootfs
+      mkdir rootfs/boot
+      mount "${DEVICE}"p3 rootfs/boot
+      mkdir rootfs/boot/efi
+      mount "${DEVICE}"p2 rootfs/boot/efi
     elif [ x"${base_path}" = x"d1" ]; then
       losetup -P "${DEVICE}" rootfs.img
       parted -s -a optimal -- "${DEVICE}" mklabel gpt
@@ -100,7 +111,7 @@ task:
     fi
     pushd rootfs
       echo "deb [trusted=yes] ${DEEPIN_REPO} beige main" > etc/apt/sources.list
-      chroot . /bin/bash -c "source /etc/profile && apt update && apt install -y systemd initramfs-tools systemd-sysv nano sudo network-manager"
+      chroot . /bin/bash -c "source /etc/profile && apt update && apt install -y systemd initramfs-tools systemd-sysv nano sudo network-manager iproute2"
       chroot . /bin/bash -c "source /etc/profile && systemctl enable systemd-networkd"
       chroot . /bin/bash -c "source /etc/profile && echo root:Riscv2022# | chpasswd"
       chroot . /bin/bash -c "source /etc/profile && echo deepin-riscv > /etc/hostname"
@@ -115,8 +126,8 @@ task:
         git clone --depth=1 https://github.com/starfive-tech/linux.git kernel
         pushd kernel
           make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv visionfive_defconfig
-          if [ -f ../visionfive/kernelconfig ]; then
-            cp -v ../visionfive/kernelconfig .config
+          if [ -f ../${base_path}/kernelconfig ]; then
+            cp -v ../${base_path}/kernelconfig .config
           fi
           make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv -j$(nproc)
           if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
@@ -131,13 +142,41 @@ task:
         popd
       
       install_grub_script: |
-        mkdir -p rootfs/boot/efi/EFI/gentoo
-        cp -v $base_path/grubriscv64.efi rootfs/boot/efi/EFI/gentoo/
+        mkdir -p rootfs/boot/efi/EFI/${DISTURB}
+        cp -v $base_path/grubriscv64.efi rootfs/boot/efi/EFI/${DISTURB}/
         mkdir -p rootfs/boot/boot
         cp -v $base_path/uEnv.txt rootfs/boot/boot
         export kernel_version=$(ls rootfs/boot/ | grep vmlinuz- | sed 's/vmlinuz-//' | head -n 1 )
         cp -v $base_path/grub.cfg rootfs/boot/
         sed -i "s/custom_kernel_version/$kernel_version/g" rootfs/boot/grub.cfg
+
+    - name: visionfive-2
+      env:
+        base_path: visionfive-2
+      kernel_script: |
+        git clone --depth=1 -b star64-5.15 https://github.com/Icenowy/linux.git kernel
+        pushd kernel
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv starfive_jh7110_defconfig
+          if [ -f ../${base_path}/kernelconfig ]; then
+            cp -v ../${base_path}/kernelconfig .config
+          fi
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv -j$(nproc)
+          if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
+            sudo make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_MOD_PATH=../rootfs/ modules_install -j$(nproc)
+          fi
+          # sudo make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_PATH=../rootfs/boot zinstall -j$(nproc)
+          # Install DTB
+          sudo cp -v arch/riscv/boot/dts/starfive/jh7110-star64.dtb ../rootfs/boot/
+          sudo cp -v .config ../rootfs/boot/latest-config
+
+          # Install Kernel
+          sudo cp -v arch/riscv/boot/Image ../rootfs/boot/
+          sudo cp -v arch/riscv/boot/Image.gz ../rootfs/boot/
+          ls -al ../rootfs/boot/
+        popd
+      
+      install_uboot_script: |
+        cp -v $base_path/vf2_uEnv.txt rootfs/boot/
 
     - name: d1
       env:
