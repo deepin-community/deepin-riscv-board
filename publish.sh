@@ -12,7 +12,7 @@ fi
 
 file_content_type="application/octet-stream"
 
-for fpath in $(ls gentoo-*-*.img.zst)
+for fpath in $(ls *.zst)
 do
   echo "Uploading $fpath..."
   name=$(basename "$fpath")

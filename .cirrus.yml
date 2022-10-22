@@ -350,6 +350,14 @@ task:
       fi
     popd
 
+    mkdir -p kernel-output
+    cp -vr rootfs/boot kernel-output
+    if [ -d rootfs/lib/modules ]; then
+      cp -vr rootfs/lib/modules kernel-output
+    fi
+
+    tar -I zstd -cvf ${DISTURB}-kernel-${base_path}-$(date +%Y%m%d%H%M%S).tar.zst kernel-output
+
     rm -rf rootfs/root/*
     umount rootfs/proc rootfs/dev/shm rootfs/dev rootfs/sys rootfs/run
     umount -l rootfs
@@ -362,5 +370,9 @@ task:
   upload_publish_script: |
     ./publish.sh
 
+  kernel_build_artifacts:
+    path: "${DISTURB}-kernel-${base_path}-*.tar.zst"
+
   upload_artifacts:
     path: "${DISTURB}-*-*.img.zst"
+
