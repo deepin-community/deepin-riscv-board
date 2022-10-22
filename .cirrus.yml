@@ -133,7 +133,7 @@ task:
           if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
             sudo make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_MOD_PATH=../rootfs/ modules_install -j$(nproc)
           fi
-          sudo make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_PATH=../rootfs/boot zinstall -j$(nproc)
+          sudo make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_PATH=../rootfs/boot install -j$(nproc)
           # Install DTB
           sudo cp -v arch/riscv/boot/dts/starfive/jh7100-starfive-visionfive-v1.dtb ../rootfs/boot/
           sudo cp -v arch/riscv/boot/dts/starfive/jh7100-beaglev-starlight.dtb ../rootfs/boot/
