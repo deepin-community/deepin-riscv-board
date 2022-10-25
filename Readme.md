@@ -1,6 +1,7 @@
 # deepin-riscv-board
 
-[![Build Status](https://api.cirrus-ci.com/github/Rabenda/deepin-riscv-board.svg)](https://cirrus-ci.com/github/Rabenda/deepin-riscv-board)
+[![Build 
+Status](https://api.cirrus-ci.com/github/deepin-community/deepin-riscv-board.svg)](https://cirrus-ci.com/github/deepin-community/deepin-riscv-board)
 
 
 ## Ref
