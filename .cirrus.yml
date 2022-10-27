@@ -6,7 +6,6 @@ compute_engine_instance:
   memory: 16G
 
 env:
-  GITHUB_TOKEN: ENCRYPTED[2a3767f52b8878062329a7597cafea6cb63236046772a2a286f57447634dec2c49b32f3f6a4637fd9df09d7a3a3e6548]
   CROSS_COMPILE: riscv64-linux-gnu-
   ARCH: riscv
   SKIP_INSTALL_PACKAGE: no
@@ -15,6 +14,8 @@ env:
   DEVICE: /dev/loop100
   DISTURB: deepin
   DEEPIN_REPO: https://mirror.iscas.ac.cn/deepin-riscv/deepin-stage1/
+  KBUILD_BUILD_USER: deepin-riscv-sig
+  KBUILD_BUILD_HOST: deepin-riscv-builder
 
 task:  
   test_machine_infoscript: |
@@ -72,14 +73,19 @@ task:
     elif [ x"${base_path}" = x"d1" ]; then
       losetup -P "${DEVICE}" rootfs.img
       parted -s -a optimal -- "${DEVICE}" mklabel gpt
-      parted -s -a optimal -- "${DEVICE}" mkpart primary ext2 40MiB 500MiB
-      parted -s -a optimal -- "${DEVICE}" mkpart primary ext4 540MiB 100%
+      parted -s -a optimal -- "${DEVICE}" mkpart primary fat32 40MiB 500MiB
+      parted -s -a optimal -- "${DEVICE}" set 1 esp on
+      parted -s -a optimal -- "${DEVICE}" mkpart primary ext4 500MiB 1000MiB
+      parted -s -a optimal -- "${DEVICE}" mkpart primary ext4 1000MiB 100%
       partprobe "${DEVICE}"
-      mkfs.ext2 -F -L boot "${DEVICE}p1"
-      mkfs.ext4 -F -L root "${DEVICE}p2"
-      mount "${DEVICE}p2" rootfs
+      mkfs.vfat -F32 -n efi "${DEVICE}p1"
+      mkfs.ext4 -F -L boot "${DEVICE}p2"
+      mkfs.ext4 -F -L root "${DEVICE}p3"
+      mount "${DEVICE}p3" rootfs
       mkdir rootfs/boot
-      mount "${DEVICE}p1" rootfs/boot
+      mount "${DEVICE}p2" rootfs/boot
+      mkdir rootfs/boot/efi
+      mount "${DEVICE}p1" rootfs/boot/efi
     fi
 
   unpack_root_tarball_script: |
@@ -112,7 +118,7 @@ task:
     pushd rootfs
       echo "deb [trusted=yes] ${DEEPIN_REPO} beige main" > etc/apt/sources.list
       chroot . /bin/bash -c "source /etc/profile && apt update && apt install -y systemd initramfs-tools systemd-sysv nano sudo network-manager iproute2"
-      chroot . /bin/bash -c "source /etc/profile && systemctl enable systemd-networkd"
+      chroot . /bin/bash -c "source /etc/profile && systemctl enable NetworkManager"
       chroot . /bin/bash -c "source /etc/profile && echo root:Riscv2022# | chpasswd"
       chroot . /bin/bash -c "source /etc/profile && echo deepin-riscv > /etc/hostname"
       ls -al boot/
@@ -129,6 +135,7 @@ task:
           if [ -f ../${base_path}/kernelconfig ]; then
             cp -v ../${base_path}/kernelconfig .config
           fi
+          sed -i '/CONFIG_LOCALVERSION_AUTO/d' .config && echo "CONFIG_LOCALVERSION_AUTO=n" >> .config
           make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv -j$(nproc)
           if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
             sudo make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_MOD_PATH=../rootfs/ modules_install -j$(nproc)
@@ -185,7 +192,6 @@ task:
         COMMIT_UBOOT: 'afc07cec423f17ebb4448a19435292ddacf19c9b'
         COMMIT_KERNEL: 'fe178cf0153d98b71cb01a46c8cc050826a17e77' # equals riscv/d1-wip head
         KERNEL_TAG: 'riscv/d1-wip'
-        KERNEL_RELEASE: '5.19.0-AllWinnerD1-Smaeul' # must match commit!
 
         SOURCE_BOOT0: 'https://github.com/smaeul/sun20i_d1_spl'
         SOURCE_OPENSBI: 'https://github.com/smaeul/opensbi'
@@ -259,19 +265,33 @@ task:
           echo 'CONFIG_MEDIA_CONTROLLER_REQUEST_API=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
           echo 'CONFIG_V4L_MEM2MEM_DRIVERS=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
           echo 'CONFIG_VIDEO_SUNXI_CEDRUS=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          # enable EFI
+          echo 'CONFIG_EFI=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          echo 'CONFIG_EFI_ZBOOT=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          # enable fat
+          echo 'CONFIG_VFAT_FS=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          echo 'CONFIG_FAT_DEFAULT_IOCHARSET="iso8859-15"' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          echo 'CONFIG_FAT_DEFAULT_UTF8=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          echo 'CONFIG_EXFAT_FS=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          echo 'CONFIG_NLS_CODEPAGE_437=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          echo 'CONFIG_NLS_ISO8859_15=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          echo 'CONFIG_NLS_DEFAULT="utf8"' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          echo 'CONFIG_NLS_UTF8=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
 
           make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv nezha_defconfig
+          sed -i '/CONFIG_LOCALVERSION_AUTO/d' .config && echo "CONFIG_LOCALVERSION_AUTO=n" >> .config
           make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv -j$(nproc)
           if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
             make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_MOD_PATH=../rootfs/ modules_install -j$(nproc)
           fi
-          # make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_PATH=../rootfs/boot zinstall -j$(nproc)
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_PATH=../rootfs/boot install -j$(nproc)
           # Install Kernel
-          cp -v arch/riscv/boot/Image ../rootfs/boot/
-          cp -v arch/riscv/boot/Image.gz ../rootfs/boot/
+          # cp -v arch/riscv/boot/Image ../rootfs/boot/
+          # cp -v arch/riscv/boot/Image.gz ../rootfs/boot/
           # Install DTB
-          # cp -v arch/riscv/boot/dts/sun20i-d1-mangopi-mq-pro-linux.dtb ../rootfs/boot/
-          # cp -v .config ../rootfs/boot/latest-config
+          # cp -v arch/riscv/boot/dts/allwinner/sun20i-d1-mangopi-mq-pro.dtb ../rootfs/boot/
+          # cp -v arch/riscv/boot/dts/allwinner/sun20i-d1-nezha.dtb ../rootfs/boot/
+
           cp -v .config ../rootfs/boot/latest-config
           ls -al ../rootfs/boot/
 
@@ -290,6 +310,14 @@ task:
           done
         popd
 
+      dtb_script: |
+        git clone --depth=1 -b d1/wip ${SOURCE_KERNEL} kernel-dtb
+        pushd kernel-dtb
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv nezha_defconfig
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv dtbs
+          cp -v arch/riscv/boot/dts/allwinner/sun20i-d1-mangopi-mq-pro.dtb ../rootfs/boot/
+          cp -v arch/riscv/boot/dts/allwinner/sun20i-d1-nezha.dtb ../rootfs/boot/
+        popd
 
       boot0_script: |
         DIR='sun20i_d1_spl'
@@ -324,22 +352,18 @@ task:
         ${DIR}/tools/mkimage -T sunxi_toc1 -d licheerv_toc1.cfg u-boot.toc1
         cp u-boot.toc1 "${OUT_DIR}"
 
-        DIR='u-boot'
-
-        # https://andreas.welcomes-you.com/boot-sw-debian-risc-v-lichee-rv/
-        cp -v $base_path/bootscr.txt .
-        
-        ${DIR}/tools/mkimage -T script -C none -O linux -A "${ARCH}" -d bootscr.txt boot.scr
-        rm bootscr.txt
-        cp boot.scr "${OUT_DIR}"
-
       flash_script: |
         dd if="${OUT_DIR}/boot0_sdcard_sun20iw1p1.bin" of="${DEVICE}" bs=8192 seek=16
         dd if="${OUT_DIR}/u-boot.toc1" of="${DEVICE}" bs=512 seek=32800
-
-      install_boot_script: |
-        mkdir -p "rootfs/boot/extlinux"
-        cp $base_path/extlinux.conf "rootfs/boot/extlinux/extlinux.conf"
+      
+      install_grub_script: |
+        mkdir -p rootfs/boot/efi/efi/boot/
+        cp -v $base_path/grubriscv64.efi rootfs/boot/efi/efi/boot/bootriscv64.efi
+        mkdir -p rootfs/boot/boot
+        cp -v $base_path/uEnv.txt rootfs/boot/boot
+        export kernel_version=$(ls rootfs/boot/ | grep vmlinuz- | sed 's/vmlinuz-//' | head -n 1 )
+        cp -v $base_path/grub.cfg rootfs/boot/
+        sed -i "s/custom_kernel_version/$kernel_version/g" rootfs/boot/grub.cfg
 
   clean_rootfs_script: |
     pushd rootfs

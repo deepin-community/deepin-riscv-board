@@ -1,0 +1,2 @@
+bootcmd=load mmc 0:1 0x58000000 /efi/deepin/grubriscv64.efi; bootefi 0x58000000
+bootcmd_mmc0=devnum=0; run mmc_boot
