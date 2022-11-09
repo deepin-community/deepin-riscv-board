@@ -16,6 +16,7 @@ env:
   DEEPIN_REPO: https://mirror.iscas.ac.cn/deepin-riscv/deepin-stage1/
   KBUILD_BUILD_USER: deepin-riscv-sig
   KBUILD_BUILD_HOST: deepin-riscv-builder
+  GITHUB_TOKEN: ENCRYPTED[7aafa8514d8601470288e2ca86822fba2941bf8504b44c611731a5f22151f9ed4c807842a56f3a8a028e1e65ed1d3a03]
 
 task:  
   test_machine_infoscript: |
