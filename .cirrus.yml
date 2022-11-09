@@ -50,7 +50,7 @@ task:
     fallocate -l 7G rootfs.img
     
     if [ x"${base_path}" = x"visionfive" ]; then
-      sfdisk rootfs.img < ${base_path}/part-table.conf
+      sfdisk rootfs.img < common/part-table.conf
       losetup -P "${DEVICE}" rootfs.img
       mkfs.ext4 "${DEVICE}"p3
       mkfs.ext4 "${DEVICE}"p4
@@ -61,7 +61,7 @@ task:
       mkdir rootfs/boot/efi
       mount "${DEVICE}"p2 rootfs/boot/efi
     elif [ x"${base_path}" = x"visionfive-2" ]; then
-      sfdisk rootfs.img < ${base_path}/part-table.conf
+      sfdisk rootfs.img < common/part-table.conf
       losetup -P "${DEVICE}" rootfs.img
       mkfs.vfat -F32 "${DEVICE}"p3
       mkfs.ext4 "${DEVICE}"p4
@@ -156,7 +156,7 @@ task:
       
       install_grub_script: |
         mkdir -p rootfs/boot/efi/EFI/${DISTURB}
-        cp -v $base_path/grubriscv64.efi rootfs/boot/efi/EFI/${DISTURB}/
+        cp -v common/grubriscv64.efi rootfs/boot/efi/EFI/${DISTURB}/
         mkdir -p rootfs/boot/boot
         cp -v $base_path/uEnv.txt rootfs/boot/boot
         export kernel_version=$(ls rootfs/boot/ | grep vmlinuz- | sed 's/vmlinuz-//' | head -n 1 )
@@ -340,7 +340,7 @@ task:
       
       install_grub_script: |
         mkdir -p rootfs/boot/efi/efi/boot/
-        cp -v $base_path/grubriscv64.efi rootfs/boot/efi/efi/boot/bootriscv64.efi
+        cp -v common/grubriscv64.efi rootfs/boot/efi/efi/boot/bootriscv64.efi
         mkdir -p rootfs/boot/boot
         cp -v $base_path/uEnv.txt rootfs/boot/boot
         export kernel_version=$(ls rootfs/boot/ | grep vmlinuz- | sed 's/vmlinuz-//' | head -n 1 )
