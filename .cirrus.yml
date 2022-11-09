@@ -43,7 +43,7 @@ task:
     update-alternatives --install /usr/bin/riscv64-linux-gnu-g++ riscv64-g++ /usr/bin/riscv64-linux-gnu-g++-12 10
   
   download_root_tarball_script: |
-    wget https://mirror.iscas.ac.cn/deepin-riscv/deepin-stage1/deepin-beige-stage1-minbase.tar
+    wget https://mirror.iscas.ac.cn/deepin-riscv/deepin-stage1/deepin-beige-stage1-dde.tar.gz
 
   create_rootfsimg_script: |
     mkdir rootfs
@@ -91,7 +91,7 @@ task:
 
   unpack_root_tarball_script: |
     pushd rootfs
-      tar xpvf ../deepin-beige-stage1-minbase.tar --xattrs-include='*.*' --numeric-owner
+      tar xpvf ../deepin-beige-stage1-dde.tar.gz --xattrs-include='*.*' --numeric-owner
     popd
 
   mount_and_setup_script: |
