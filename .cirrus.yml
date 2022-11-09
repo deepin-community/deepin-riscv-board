@@ -270,6 +270,8 @@ task:
           echo 'CONFIG_MEDIA_CONTROLLER_REQUEST_API=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
           echo 'CONFIG_V4L_MEM2MEM_DRIVERS=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
           echo 'CONFIG_VIDEO_SUNXI_CEDRUS=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
+          # enable binfmt_misc
+          echo 'CONFIG_BINFMT_MISC=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
           # enable EFI
           echo 'CONFIG_EFI=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
           echo 'CONFIG_EFI_ZBOOT=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
