@@ -14,41 +14,25 @@ env:
   DEVICE: /dev/loop100
   DISTURB: deepin
   DEEPIN_REPO: https://mirror.iscas.ac.cn/deepin-riscv/deepin-stage1/
+  DEEPIN_BASE_ROOTFS: https://mirror.iscas.ac.cn/deepin-riscv/deepin-stage1/deepin-beige-stage1-dde.tar.gz
   KBUILD_BUILD_USER: deepin-riscv-sig
   KBUILD_BUILD_HOST: deepin-riscv-builder
   GITHUB_TOKEN: ENCRYPTED[7aafa8514d8601470288e2ca86822fba2941bf8504b44c611731a5f22151f9ed4c807842a56f3a8a028e1e65ed1d3a03]
 
 task:  
-  test_machine_infoscript: |
-    uname -a
-    echo $(nproc)
-    lscpu
-    whoami
-    env
-    mkdir -p ${OUT_DIR}
-
+  machine_init_script: |
+    scripts/machine_init.sh
+    
   install_qemu_script: |
-    apt update
-    apt install -y qemu binfmt-support qemu-user-static curl wget
-    update-binfmts --display
-
+    scripts/qemu_setup.sh
+    
   install_build_script: |
-    apt update
-    apt install -y gdisk dosfstools g++-12-riscv64-linux-gnu build-essential \
-                        libncurses-dev gawk flex bison openssl libssl-dev \
-                        dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf mkbootimg \
-                        fakeroot genext2fs genisoimage libconfuse-dev mtd-utils mtools qemu-utils qemu-utils squashfs-tools \
-                        device-tree-compiler rauc simg2img u-boot-tools f2fs-tools arm-trusted-firmware-tools swig
-    update-alternatives --install /usr/bin/riscv64-linux-gnu-gcc riscv64-gcc /usr/bin/riscv64-linux-gnu-gcc-12 10
-    update-alternatives --install /usr/bin/riscv64-linux-gnu-g++ riscv64-g++ /usr/bin/riscv64-linux-gnu-g++-12 10
+    scripts/install_deps.sh
   
   download_root_tarball_script: |
-    wget https://mirror.iscas.ac.cn/deepin-riscv/deepin-stage1/deepin-beige-stage1-dde.tar.gz
+    wget -O deepin-rootfs.tar.gz ${DEEPIN_BASE_ROOTFS}
 
   create_rootfsimg_script: |
-    mkdir rootfs
-    fallocate -l 7G rootfs.img
-    
     if [ x"${base_path}" = x"visionfive" ]; then
       sfdisk rootfs.img < common/part-table.conf
       losetup -P "${DEVICE}" rootfs.img
@@ -91,39 +75,14 @@ task:
 
   unpack_root_tarball_script: |
     pushd rootfs
-      tar xpvf ../deepin-beige-stage1-dde.tar.gz --xattrs-include='*.*' --numeric-owner
+      tar xpvf ../deepin-rootfs.tar.gz --xattrs-include='*.*' --numeric-owner
     popd
 
   mount_and_setup_script: |
-    pushd rootfs
-      mount -t proc proc proc
-      mount -B /dev dev/
-      mount --make-rslave dev
-      mount -B /sys sys/
-      mount --make-rslave sys
-      mount --bind /run run
-      mount --make-rslave run
-
-      test -L dev/shm && rm dev/shm && mkdir dev/shm
-      mount --types tmpfs --options nosuid,nodev,noexec shm dev/shm
-      chmod 1777 dev/shm
-      
-      cp --dereference /etc/resolv.conf etc/
-      cat ../${base_path}/fstab | sudo tee -a etc/fstab
-    popd
+    scripts/rootfs_setup.sh
 
   update_root_tarball_script: |
-    if [ x"${SKIP_INSTALL_PACKAGE}" = x"yes" ]; then
-      exit 0
-    fi
-    pushd rootfs
-      echo "deb [trusted=yes] ${DEEPIN_REPO} beige main" > etc/apt/sources.list
-      chroot . /bin/bash -c "source /etc/profile && apt update && apt install -y systemd initramfs-tools systemd-sysv nano sudo network-manager iproute2"
-      chroot . /bin/bash -c "source /etc/profile && systemctl enable NetworkManager"
-      chroot . /bin/bash -c "source /etc/profile && echo root:Riscv2022# | chpasswd"
-      chroot . /bin/bash -c "source /etc/profile && echo deepin-riscv > /etc/hostname"
-      ls -al boot/
-    popd
+    scripts/update_rootfs.sh
 
   matrix:
     - name: visionfive
@@ -194,8 +153,6 @@ task:
     - name: d1
       env:
         base_path: d1
-        COMMIT_BOOT0: '882671fcf53137aaafc3a94fa32e682cb7b921f1'
-        COMMIT_UBOOT: 'afc07cec423f17ebb4448a19435292ddacf19c9b'
         KERNEL_TAG: 'riscv/d1-wip'
 
         SOURCE_BOOT0: 'https://github.com/smaeul/sun20i_d1_spl'
@@ -350,33 +307,10 @@ task:
         sed -i "s/custom_kernel_version/$kernel_version/g" rootfs/boot/grub.cfg
 
   clean_rootfs_script: |
-    pushd rootfs
-      if [ x"$(cat boot/latest-config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
-        chroot . /bin/bash -c 'source /etc/profile && update-initramfs -c -k all'
-      else
-        sed -i '/initrd/d' boot/grub.cfg
-      fi
-    popd
-
-    mkdir -p kernel-output
-    cp -vr rootfs/boot kernel-output
-    if [ -d rootfs/lib/modules ]; then
-      cp -vr rootfs/lib/modules kernel-output
-    fi
-
-    tar -I zstd -cvf ${DISTURB}-kernel-${base_path}-$(date +%Y%m%d%H%M%S).tar.zst kernel-output
-
-    rm -rf rootfs/root/*
-    umount rootfs/proc rootfs/dev/shm rootfs/dev rootfs/sys rootfs/run
-    umount -l rootfs
-    losetup -d ${DEVICE}
-    export file_name=${DISTURB}-${base_path}-$(date +%Y%m%d%H%M%S)
-    mv rootfs.img ${file_name}.img
-    zstd -T0 --ultra -20 $file_name.img
-    ls -al .
+    scripts/clean_rootfs.sh
 
   upload_publish_script: |
-    ./publish.sh
+    scripts/publish.sh
 
   kernel_build_artifacts:
     path: "${DISTURB}-kernel-${base_path}-*.tar.zst"
