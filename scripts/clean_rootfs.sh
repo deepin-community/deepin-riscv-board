@@ -16,6 +16,7 @@ clean_rootfs() {
     if [ -d rootfs/lib/modules ]; then
       cp -vr rootfs/lib/modules kernel-output
     fi
+    find ${OUT_DIR} -name "*.bin" -exec cp '{}' kernel-output/ \;
 
     tar -I zstd -cvf ${DISTURB}-kernel-${base_path}-$(date +%Y%m%d%H%M%S).tar.zst kernel-output
 

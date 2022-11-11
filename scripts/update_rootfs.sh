@@ -16,3 +16,5 @@ update_rootfs() {
       ls -al boot/
     popd
 }
+
+update_rootfs
