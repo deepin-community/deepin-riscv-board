@@ -19,16 +19,16 @@ env:
   KBUILD_BUILD_HOST: deepin-riscv-builder
   GITHUB_TOKEN: ENCRYPTED[7aafa8514d8601470288e2ca86822fba2941bf8504b44c611731a5f22151f9ed4c807842a56f3a8a028e1e65ed1d3a03]
 
-task:  
+task:
   machine_init_script: |
     scripts/machine_init.sh
-    
+
   install_qemu_script: |
     scripts/qemu_setup.sh
-    
+
   install_build_script: |
     scripts/install_deps.sh
-  
+
   download_root_tarball_script: |
     wget -O deepin-rootfs.tar.gz ${DEEPIN_BASE_ROOTFS}
 
@@ -71,6 +71,22 @@ task:
       mount "${DEVICE}p2" rootfs/boot
       mkdir rootfs/boot/efi
       mount "${DEVICE}p1" rootfs/boot/efi
+    elif [ x"${base_path}" = x"sifive" ]; then
+      losetup -P "${DEVICE}" rootfs.img
+      parted -s -a optimal -- "${DEVICE}" mklabel gpt
+      parted -s -a optimal -- "${DEVICE}" mkpart primary fat32 40MiB 500MiB
+      parted -s -a optimal -- "${DEVICE}" set 1 esp on
+      parted -s -a optimal -- "${DEVICE}" mkpart primary ext4 500MiB 1000MiB
+      parted -s -a optimal -- "${DEVICE}" mkpart primary ext4 1000MiB 100%
+      partprobe "${DEVICE}"
+      mkfs.vfat -F32 -n efi "${DEVICE}p1"
+      mkfs.ext4 -F -L boot "${DEVICE}p2"
+      mkfs.ext4 -F -L root "${DEVICE}p3"
+      mount "${DEVICE}p3" rootfs
+      mkdir rootfs/boot
+      mount "${DEVICE}p2" rootfs/boot
+      mkdir rootfs/boot/efi
+      mount "${DEVICE}p1" rootfs/boot/efi
     fi
 
   unpack_root_tarball_script: |
@@ -85,13 +101,75 @@ task:
     scripts/update_rootfs.sh
 
   matrix:
+    - name: sifive
+      env:
+        base_path: sifive
+        kernel_branch: linux-6.0.y
+        kernel_git: git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
+        kernel_config: defconfig
+        opensbi_branch: v1.1
+        opensbi_git: https://github.com/riscv-software-src/opensbi.git
+        uboot_branch: v2023.01-rc1
+        uboot_git: https://github.com/u-boot/u-boot.git
+        uboot_config: sifive_unmatched_defconfig
+      kernel_script: |
+        git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
+        pushd kernel
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv ${kernel_config}
+          if [ -f ../${base_path}/kernelconfig ]; then
+            cp -v ../${base_path}/kernelconfig .config
+          fi
+          sed -i '/CONFIG_LOCALVERSION_AUTO/d' .config && echo "CONFIG_LOCALVERSION_AUTO=n" >> .config
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv -j$(nproc)
+          if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
+            make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_MOD_PATH=../rootfs/ modules_install -j$(nproc)
+          fi
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_PATH=../rootfs/boot install -j$(nproc)
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv bindeb-pkg -j$(nproc)
+          # Install DTB
+          cp -v arch/riscv/boot/dts/sifive/hifive-unmatched-a00.dtb ../rootfs/boot/
+
+          # Copy kernel Deb to root HOME
+          cp -v ../*.deb ../rootfs/root/
+
+          cp -v .config ../rootfs/boot/latest-config
+          ls -al ../rootfs/boot/
+        popd
+
+      uboot_script: |
+        DIR='opensbi'
+        git clone --depth=1 -b ${opensbi_branch} ${opensbi_git} ${DIR}
+        pushd ${DIR}
+          make CROSS_COMPILE="${CROSS_COMPILE}" PLATFORM=generic
+        popd
+        cp opensbi/build/platform/generic/firmware/fw_dynamic.bin ${OUT_DIR}
+
+        DIR='u-boot'
+        git clone --depth=1 -b ${uboot_branch} ${uboot_git} ${DIR}
+        pushd ${DIR}
+          make CROSS_COMPILE="${CROSS_COMPILE}" ARCH="${ARCH}" ${uboot_config}
+          make CROSS_COMPILE="${CROSS_COMPILE}" ARCH="${ARCH}" OPENSBI="${OUT_DIR}/fw_dynamic.bin" -j$(nproc)
+        popd
+        cp ${DIR}/spl/u-boot-spl.bin "${OUT_DIR}"
+        cp ${DIR}/u-boot.itb "${OUT_DIR}"
+
+      install_grub_script: |
+        mkdir -p rootfs/boot/efi/efi/boot
+        cp -v common/grubriscv64.efi rootfs/boot/efi/efi/boot/bootriscv64.efi
+        export kernel_version=$(ls rootfs/boot/ | grep vmlinuz- | sed 's/vmlinuz-//' | head -n 1 )
+        cp -v $base_path/grub.cfg rootfs/boot/
+        sed -i "s/custom_kernel_version/$kernel_version/g" rootfs/boot/grub.cfg
+
     - name: visionfive
       env:
         base_path: visionfive
+        kernel_branch: visionfive
+        kernel_git: https://github.com/starfive-tech/linux.git
+        kernel_config: visionfive_defconfig
       kernel_script: |
-        git clone --depth=1 https://github.com/starfive-tech/linux.git kernel
+        git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
         pushd kernel
-          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv visionfive_defconfig
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv ${kernel_config}
           if [ -f ../${base_path}/kernelconfig ]; then
             cp -v ../${base_path}/kernelconfig .config
           fi
@@ -112,7 +190,7 @@ task:
           cp -v .config ../rootfs/boot/latest-config
           ls -al ../rootfs/boot/
         popd
-      
+
       install_grub_script: |
         mkdir -p rootfs/boot/efi/EFI/${DISTURB}
         cp -v common/grubriscv64.efi rootfs/boot/efi/EFI/${DISTURB}/
@@ -125,10 +203,13 @@ task:
     - name: visionfive-2
       env:
         base_path: visionfive-2
+        kernel_branch: star64-5.15
+        kernel_git: https://github.com/Icenowy/linux.git
+        kernel_config: starfive_jh7110_defconfig
       kernel_script: |
-        git clone --depth=1 -b star64-5.15 https://github.com/Icenowy/linux.git kernel
+        git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
         pushd kernel
-          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv starfive_jh7110_defconfig
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv ${kernel_config}
           if [ -f ../${base_path}/kernelconfig ]; then
             cp -v ../${base_path}/kernelconfig .config
           fi
@@ -146,22 +227,24 @@ task:
           cp -v arch/riscv/boot/Image.gz ../rootfs/boot/
           ls -al ../rootfs/boot/
         popd
-      
+
       install_uboot_script: |
         cp -v $base_path/vf2_uEnv.txt rootfs/boot/
 
     - name: d1
       env:
         base_path: d1
-        KERNEL_TAG: 'riscv/d1-wip'
-
-        SOURCE_BOOT0: 'https://github.com/smaeul/sun20i_d1_spl'
-        SOURCE_OPENSBI: 'https://github.com/smaeul/opensbi'
-        SOURCE_UBOOT: 'https://github.com/smaeul/u-boot'
-        SOURCE_KERNEL: 'https://github.com/smaeul/linux'
+        kernel_branch: riscv/d1-wip
+        kernel_git: https://github.com/smaeul/linux.git
+        kernel_config: nezha_defconfig
+        opensbi_branch: d1-wip
+        opensbi_git: https://github.com/smaeul/opensbi.git
+        uboot_branch: d1-wip
+        uboot_git: https://github.com/smaeul/u-boot.git
+        uboot_config: nezha_defconfig
 
       kernel_script: |
-        git clone --depth=1 -b ${KERNEL_TAG} ${SOURCE_KERNEL} kernel
+        git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
         pushd kernel
           export DIR=$PWD
           echo "CONFIG_LOCALVERSION=${KERNEL_RELEASE}" >> ${DIR}/arch/riscv/configs/nezha_defconfig
@@ -242,7 +325,7 @@ task:
           echo 'CONFIG_NLS_DEFAULT="utf8"' >> ${DIR}/arch/riscv/configs/nezha_defconfig
           echo 'CONFIG_NLS_UTF8=y' >> ${DIR}/arch/riscv/configs/nezha_defconfig
 
-          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv nezha_defconfig
+          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv ${kernel_config}
           sed -i '/CONFIG_LOCALVERSION_AUTO/d' .config && echo "CONFIG_LOCALVERSION_AUTO=n" >> .config
           make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv -j$(nproc)
           if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
@@ -279,24 +362,23 @@ task:
 
       uboot_script: |
         DIR='opensbi'
-        git clone -b d1-wip "${SOURCE_OPENSBI}" ${DIR}
+        git clone --depth=1 -b ${opensbi_branch} ${opensbi_git} ${DIR}
         pushd ${DIR}
           make CROSS_COMPILE="${CROSS_COMPILE}" PLATFORM=generic FW_PIC=y FW_OPTIONS=0x2
         popd
         cp opensbi/build/platform/generic/firmware/fw_dynamic.bin ${OUT_DIR}
 
         DIR='u-boot'
-        git clone "${SOURCE_UBOOT}"
+        git clone --depth=1 -b ${uboot_branch} ${uboot_git} ${DIR}
         pushd ${DIR}
-          git checkout d1-wip
-          make CROSS_COMPILE="${CROSS_COMPILE}" ARCH="${ARCH}" nezha_defconfig
+          make CROSS_COMPILE="${CROSS_COMPILE}" ARCH="${ARCH}" ${uboot_config}
           make CROSS_COMPILE="${CROSS_COMPILE}" ARCH="${ARCH}" OPENSBI="${OUT_DIR}/fw_dynamic.bin" -j$(nproc)
         popd
         cp ${DIR}/u-boot-sunxi-with-spl.bin "${OUT_DIR}"
-        
+
       flash_boot_spl_script: |
         dd if="${OUT_DIR}/u-boot-sunxi-with-spl.bin" of="${DEVICE}" bs=1024 seek=128
-      
+
       install_grub_script: |
         mkdir -p rootfs/boot/efi/efi/boot/
         cp -v common/grubriscv64.efi rootfs/boot/efi/efi/boot/bootriscv64.efi
@@ -317,4 +399,3 @@ task:
 
   upload_artifacts:
     path: "${DISTURB}-*-*.img.zst"
-
