@@ -8,6 +8,8 @@ machine_info() {
     lscpu
     whoami
     env
+    fdisk -l
+    df -h
 }
 
 init() {
