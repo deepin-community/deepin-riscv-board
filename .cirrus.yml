@@ -113,28 +113,30 @@ task:
         uboot_git: https://github.com/u-boot/u-boot.git
         uboot_config: sifive_unmatched_defconfig
       kernel_script: |
-        git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
-        pushd kernel
-          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv ${kernel_config}
-          if [ -f ../${base_path}/kernelconfig ]; then
-            cp -v ../${base_path}/kernelconfig .config
-          fi
-          sed -i '/CONFIG_LOCALVERSION_AUTO/d' .config && echo "CONFIG_LOCALVERSION_AUTO=n" >> .config
-          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv -j$(nproc)
-          if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
-            make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_MOD_PATH=../rootfs/ modules_install -j$(nproc)
-          fi
-          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_PATH=../rootfs/boot install -j$(nproc)
-          make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv bindeb-pkg -j$(nproc)
-          # Install DTB
-          cp -v arch/riscv/boot/dts/sifive/hifive-unmatched-a00.dtb ../rootfs/boot/
+        cp -v ./rootfs/boot/config-* ./rootfs/boot/latest-config
+        echo "Skip & install maintain-kernel"
+        # git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
+        # pushd kernel
+        #   make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv ${kernel_config}
+        #   if [ -f ../${base_path}/kernelconfig ]; then
+        #     cp -v ../${base_path}/kernelconfig .config
+        #   fi
+        #   sed -i '/CONFIG_LOCALVERSION_AUTO/d' .config && echo "CONFIG_LOCALVERSION_AUTO=n" >> .config
+        #   make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv -j$(nproc)
+        #   if [ x"$(cat .config | grep CONFIG_MODULES=y)" = x"CONFIG_MODULES=y" ]; then
+        #     make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_MOD_PATH=../rootfs/ modules_install -j$(nproc)
+        #   fi
+        #   make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv INSTALL_PATH=../rootfs/boot install -j$(nproc)
+        #   make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv bindeb-pkg -j$(nproc)
+        #   # Install DTB
+        #   cp -v arch/riscv/boot/dts/sifive/hifive-unmatched-a00.dtb ../rootfs/boot/
 
-          # Copy kernel Deb to root HOME
-          cp -v ../*.deb ../rootfs/root/
+        #   # Copy kernel Deb to root HOME
+        #   cp -v ../*.deb ../rootfs/root/
 
-          cp -v .config ../rootfs/boot/latest-config
-          ls -al ../rootfs/boot/
-        popd
+        #   cp -v .config ../rootfs/boot/latest-config
+        #   ls -al ../rootfs/boot/
+        # popd
 
       uboot_script: |
         DIR='opensbi'
@@ -156,7 +158,7 @@ task:
       install_grub_script: |
         mkdir -p rootfs/boot/efi/efi/boot
         cp -v common/grubriscv64.efi rootfs/boot/efi/efi/boot/bootriscv64.efi
-        export kernel_version=$(ls rootfs/boot/ | grep vmlinuz- | sed 's/vmlinuz-//' | head -n 1 )
+        export kernel_version=$(ls rootfs/boot/ | grep vmlinux- | sed 's/vmlinux-//' | head -n 1 )
         cp -v $base_path/grub.cfg rootfs/boot/
         sed -i "s/custom_kernel_version/$kernel_version/g" rootfs/boot/grub.cfg
 
@@ -398,4 +400,4 @@ task:
     path: "${DISTURB}-kernel-${base_path}-*.tar.zst"
 
   upload_artifacts:
-    path: "${DISTURB}-*-*.img.zst"
+    path: "${DISTURB}-*-*.img.zst*"

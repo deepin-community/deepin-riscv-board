@@ -27,6 +27,8 @@ clean_rootfs() {
     export file_name=${DISTURB}-${base_path}-$(date +%Y%m%d%H%M%S)
     mv rootfs.img ${file_name}.img
     zstd -T0 --ultra -20 $file_name.img
+    split -b 800M -d -a 1 $file_name.img.zst $file_name.img.zst.
+    rm $file_name.img.zst
     ls -al .
 }
 
