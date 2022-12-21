@@ -207,7 +207,7 @@ task:
         base_path: visionfive-2
         kernel_branch: star64-5.15
         kernel_git: https://github.com/Icenowy/linux.git
-        kernel_config: starfive_jh7110_defconfig
+        kernel_config: star64_defconfig
       kernel_script: |
         git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
         pushd kernel
