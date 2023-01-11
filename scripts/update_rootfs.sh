@@ -8,7 +8,7 @@ update_rootfs() {
     fi
     pushd rootfs
       echo "deb [trusted=yes] ${DEEPIN_REPO} beige main" > etc/apt/sources.list
-      chroot . /bin/bash -c "source /etc/profile && apt update && apt install -y systemd initramfs-tools systemd-sysv nano sudo network-manager iproute2"
+      chroot . /bin/bash -c "source /etc/profile && apt update && apt install -y systemd initramfs-tools systemd-sysv nano sudo network-manager iproute2 vim deepin-terminal dcc-network-plugin"
       chroot . /bin/bash -c "source /etc/profile && systemctl enable NetworkManager"
       chroot . /bin/bash -c "source /etc/profile && echo root:Riscv2022# | chpasswd"
       chroot . /bin/bash -c "source /etc/profile && echo deepin-riscv > /etc/hostname"
