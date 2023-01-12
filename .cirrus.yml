@@ -210,8 +210,8 @@ task:
         kernel_config: starfive_visionfive2_defconfig
       kernel_script: |
         git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
-        git fetch origin  pull/72 
-        git cherry-pick 66986a70f4dae468e31ae0b4c51805a24dc35588
+        wget https://github.com/starfive-tech/linux/commit/66986a70f4dae468e31ae0b4c51805a24dc35588.patch 
+        git am 66986a70f4dae468e31ae0b4c51805a24dc35588.patch
         pushd kernel
           make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv ${kernel_config}
           if [ -f ../${base_path}/kernelconfig ]; then
