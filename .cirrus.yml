@@ -210,9 +210,9 @@ task:
         kernel_config: starfive_visionfive2_defconfig
       kernel_script: |
         git clone --depth=1 -b ${kernel_branch} ${kernel_git} kernel
-        wget https://github.com/starfive-tech/linux/commit/2f75442523e4b44bdea4ae5bc2e95137d0303c8b.patch 
-        git am 2f75442523e4b44bdea4ae5bc2e95137d0303c8b.patch
         pushd kernel
+          wget https://github.com/starfive-tech/linux/commit/2f75442523e4b44bdea4ae5bc2e95137d0303c8b.patch 
+          git am 2f75442523e4b44bdea4ae5bc2e95137d0303c8b.patch
           make CROSS_COMPILE=riscv64-linux-gnu- ARCH=riscv ${kernel_config}
           if [ -f ../${base_path}/kernelconfig ]; then
             cp -v ../${base_path}/kernelconfig .config
